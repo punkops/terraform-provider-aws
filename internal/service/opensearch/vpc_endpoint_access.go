@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/opensearchservice"
+	"github.com/hashicorp/aws-sdk-go-base/v2/awsv1shim/v2/tfawserr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
@@ -24,12 +25,10 @@ func ResourceVPCEndpointAccess() *schema.Resource {
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceVPCEndpointAccessCreate,
 		ReadWithoutTimeout:   resourceVPCEndpointAccessRead,
-		UpdateWithoutTimeout: resourceVPCEndpointAccessUpdate,
 		DeleteWithoutTimeout: resourceVPCEndpointAccessDelete,
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(60 * time.Minute),
-			Update: schema.DefaultTimeout(60 * time.Minute),
 			Delete: schema.DefaultTimeout(90 * time.Minute),
 		},
 
@@ -99,27 +98,22 @@ func findVPCEndpointAccessPrincipalByID(ctx context.Context, conn *opensearchser
 	return "", fmt.Errorf("VPC Endpoint Principal not found for domain: %s and ID: %s", domain, id)
 }
 
-func resourceVPCEndpointAccessUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	conn := meta.(*conns.AWSClient).OpenSearchConn(ctx)
-
-	_, err := findVPCEndpointAccessPrincipalByID(ctx, conn, d.Get(names.AttrDomainName).(string), d.Id())
-
-	if err != nil {
-		return sdkdiag.AppendErrorf(diags, "reading OpenSearch VPC endpoint access: %s", err)
-	}
-
-	return diags
-}
-
 func resourceVPCEndpointAccessDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	conn := meta.(*conns.AWSClient).OpenSearchConn(ctx)
 
-	_, err := findVPCEndpointAccessPrincipalByID(ctx, conn, d.Get(names.AttrDomainName).(string), d.Id())
+	log.Printf("[DEBUG] Deleting OpenSearch VPC Endpoint Access: %s", d.Id())
+	_, err := conn.RevokeVpcEndpointAccessWithContext(ctx, &opensearchservice.RevokeVpcEndpointAccessInput{
+		DomainName: aws.String(d.Get(names.AttrDomainName).(string)),
+		Account:    aws.String(d.Get("account").(string)),
+	})
+
+	if tfawserr.ErrCodeEquals(err, opensearchservice.ErrCodeResourceNotFoundException) {
+		return diags
+	}
 
 	if err != nil {
-		return sdkdiag.AppendErrorf(diags, "reading OpenSearch VPC endpoint access: %s", err)
+		return sdkdiag.AppendErrorf(diags, "deleting OpenSearch VPC Endpoint Access (%s): %s", d.Id(), err)
 	}
 
 	return diags
