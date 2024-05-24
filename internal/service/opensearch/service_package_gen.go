@@ -70,6 +70,10 @@ func (p *servicePackage) SDKResources(ctx context.Context) []*types.ServicePacka
 			Factory:  ResourceVPCEndpoint,
 			TypeName: "aws_opensearch_vpc_endpoint",
 		},
+		{
+			Factory:  ResourceVPCEndpointAccess,
+			TypeName: "aws_opensearch_vpc_endpoint_access",
+		},
 	}
 }
 
